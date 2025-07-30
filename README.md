@@ -1,1 +1,1 @@
-ML PROJECT.
+Vigilance AI: The intelligent guardian of your school's digital frontier. This AI/ML project aims to secure BYOD environments by intelligently monitoring classrooms in education for enhanced safety and productivity. (Project currently 50% complete and under active development.)
