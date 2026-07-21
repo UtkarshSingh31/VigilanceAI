@@ -1,0 +1,21 @@
+[project]
+name = "vigilance"
+version = "0.1.0"
+description = "Multi-Stage Unsupervised Behavioral Anomaly Detection Engine"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "torch>=2.3.0",
+    "torchvision>=0.18.0",
+    "scikit-learn>=1.5.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "joblib>=1.4.0",
+    "sentence-transformers>=3.0.0",
+    "hdbscan>=0.8.33",
+    "pydantic>=2.7.0",
+]
+[tool.uv]
+managed = true
