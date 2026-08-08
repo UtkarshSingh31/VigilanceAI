@@ -49,11 +49,10 @@ def build_engineered_features(
             'network_speed_kb',
             'packet_frequency',
             'scoring_index',
-            'ratio_score'
+            'ratio_score',
+            'cluster_mean_speed',
+            'text_cluster'
         ]
-
-        if 'text_cluster' in df.columns:
-            feature_columns.extend(['text_cluster', 'cluster_mean_speed'])
 
         final_df = df[feature_columns].copy().astype(np.float32)
 
@@ -63,3 +62,4 @@ def build_engineered_features(
     except Exception as e:
         logger.error(f"Error in feature engineering pipeline: {e}")
         raise
+    
