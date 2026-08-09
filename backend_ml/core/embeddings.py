@@ -5,7 +5,7 @@ import numpy as np
 from typing import Optional
 from backend_ml.logger import get_logger
 from sentence_transformers import SentenceTransformer
-from sklearn.cluster import HDBSCAN 
+from hdbscan.prediction import approximate_predict
 
 logger=get_logger(__name__)
 
@@ -53,7 +53,7 @@ def assign_text_cluster(
         if clusterer_path:
             logger.debug(f"Loading HDBSCAN clusterer from: {clusterer_path}")
             clusterer = joblib.load(clusterer_path)
-            cluster_labels, _ = HDBSCAN.prediction.approximate_predict(clusterer, embeddings)
+            cluster_labels, strengths = approximate_predict(clusterer, embeddings)
         else:
             logger.warning("No HDBSCAN clusterer path provided. Assigning noise label (-1) to titles.")
             cluster_labels = np.full(len(unique_titles), -1)
@@ -61,7 +61,7 @@ def assign_text_cluster(
 
         # map cluster back to titles
         title_to_cluster=dict(zip(unique_titles, cluster_labels))
-        processed_df['text_cluster']=processed_df['cleaned_window_text'].map(title_to_cluster).astype(int)
+        processed_df['text_cluster']=processed_df['cleaned_window_title'].map(title_to_cluster).astype(int)
 
         logger.info("Text clustering completed successfully.")
         return processed_df

@@ -10,10 +10,24 @@ def build_engineered_features(
     global_train_mean: float=0.0
 ) -> pd.DataFrame:
     """
-    Executes the exact numerical feature engineering from the notebook:
-    - scoring_index = network_speed_kb * packet_frequency
-    - ratio_score = network_speed_kb / (packet_frequency + epsilon)
-    - cluster_mean_speed mapping
+    Performs room-specific feature engineering.
+
+    cluster_speed_map and global_train_mean must come from the
+    training artifacts belonging to the current room.
+
+    Expected input columns:
+        network_speed_kb
+        packet_frequency
+        text_cluster
+
+    Output features:
+        network_speed_kb
+        packet_frequency
+        scoring_index
+        ratio_score
+        cluster_mean_speed
+        text_cluster
+
     """
     try:
         logger.debug(f"Starting feature engineering on DataFrame shape: {df.shape}")
@@ -35,16 +49,24 @@ def build_engineered_features(
         # 2. Ratio Score (Speed vs Packet Density)
         df['ratio_score'] = df['network_speed_kb'] / (df['packet_frequency'] + epsilon)
 
-        # 3. Cluster Mean Speed Mapping (if text_cluster exists)
-        if 'text_cluster' in df.columns and cluster_speed_map is not None:
-            df['cluster_mean_speed'] = (
-                df['text_cluster']
-                .map(cluster_speed_map)
-                .fillna(global_train_mean)
-            )
-            df['cluster_mean_speed'] = np.around(df['cluster_mean_speed'], 2)
+        # 3. Cluster Mean Speed Mapping 
 
-        # Select exact numeric feature ordering matching training
+        cluster_mean_speed = (
+            df["text_cluster"]
+            .map(cluster_speed_map)
+        )
+
+        df["cluster_mean_speed"] = np.around(
+            cluster_mean_speed,
+            2,
+        )
+        
+        df["cluster_mean_speed"] = (
+            df["cluster_mean_speed"]
+            .fillna(global_train_mean)
+        )
+
+        # exact numeric feature ordering matching training
         feature_columns = [
             'network_speed_kb',
             'packet_frequency',

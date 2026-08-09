@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from logger import get_logger
+from backend_ml.logger import get_logger
 
 
 logger = get_logger(__name__)
@@ -10,7 +10,7 @@ class LSTMAutoencoder(nn.Module):
         """
         The structural blueprint for the Anomaly Detection model.
         """
-        super(LSTMAutoencoder, self).__init__()
+        super().__init__()
         
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -55,7 +55,7 @@ class LSTMAutoencoder(nn.Module):
         """
         try:
             # Check input dimensions before running matrix operations
-            if x.dim() != 3 or x.shape[2] != self.input_dim:
+            if x.dim() != 3 or x.size(-1) != self.input_dim:
                 logger.error(
                     f"Tensor dimension mismatch! Expected (batch, seq_len, {self.input_dim}), "
                     f"got shape {tuple(x.shape)}"
@@ -67,7 +67,7 @@ class LSTMAutoencoder(nn.Module):
             
             #  Repeat context vector for sequence length
             seq_len = x.shape[1]
-            hidden_reshaped = hidden[-1].unsqueeze(1).repeat(1, seq_len, 1)
+            hidden_reshaped = hidden[-1].unsqueeze(1).expand(-1, seq_len, -1)
             
             #  Decode
             decoder_out, _ = self.decoder_lstm(hidden_reshaped)
@@ -80,3 +80,5 @@ class LSTMAutoencoder(nn.Module):
         except Exception as e:
             logger.error(f"Error during LSTM forward pass execution: {e}")
             raise
+
+        
