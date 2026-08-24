@@ -1,6 +1,6 @@
 import pandas as pd
 from typing import Dict, Any, List
-from backend_ml.core.embeddings import assign_text_clusters
+from backend_ml.core.embeddings import assign_text_cluster
 from backend_ml.core.features import build_engineered_features
 from backend_ml.core.inference import InferenceEngine
 from backend_ml.logger import get_logger
@@ -116,7 +116,7 @@ class PipelineOrchestrator:
             raw_df = pd.DataFrame(telemetry_data)
 
             # Text Clustering via SentenceTransformers + HDBSCAN approximate_predict()
-            clustered_df = assign_text_clusters(
+            clustered_df = assign_text_cluster(
                 raw_df, 
                 clusterer_path=clusterer_path
             )
