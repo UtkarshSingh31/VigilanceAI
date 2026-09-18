@@ -16,6 +16,11 @@ dependencies = [
     "sentence-transformers>=3.0.0",
     "hdbscan>=0.8.33",
     "pydantic>=2.7.0",
+    "huggingface_hub",
+    "logging",
+    "python-dotenv",
+    "pytest",
+    "pytest-mock"
 ]
 [tool.uv]
 managed = true
