@@ -1,5 +1,6 @@
 import joblib
 import torch
+import numpy as np
 import pandas as pd
 from typing import Dict, Any
 from backend_ml.core.architecture import LSTMAutoencoder
@@ -7,103 +8,96 @@ from backend_ml.logger import get_logger
 
 logger = get_logger(__name__)
 
+
 class InferenceEngine:
     def __init__(
-        self, 
-        scaler_path: str, 
-        isolation_forest_path: str, 
+        self,
+        scaler_path: str,
+        isolation_forest_path: str,
         lstm_weights_path: str,
-        input_dim: int = 6,  
-        hidden_dim: int = 64,
+        input_dim: int = 6,
+        hidden_dim: int = 32,
         device: str = "cpu"
     ):
         self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
-        logger.info(f"Initializing InferenceEngine on device: {self.device} (input_dim={self.input_dim})")
+        logger.info(f"Initializing InferenceEngine on device: {self.device} (input_dim={self.input_dim}, hidden_dim={self.hidden_dim})")
 
         try:
-            #  Load Scikit-Learn Scaler and Isolation Forest artifacts
             self.scaler = joblib.load(scaler_path)
             self.isolation_forest = joblib.load(isolation_forest_path)
-            logger.info("Successfully loaded StandardScaler and IsolationForest artifacts.")
+            logger.info("Loaded StandardScaler and IsolationForest artifacts.")
 
-            # Instantiate PyTorch LSTM Autoencoder
-            self.lstm_model = LSTMAutoencoder(input_dim=self.input_dim, hidden_dim=hidden_dim)
-            self.lstm_model.load_state_dict(
-                torch.load(
-                    lstm_weights_path, 
-                    map_location=self.device),
-                    weights_only=True
-                )
+            self.lstm_model = LSTMAutoencoder(
+                input_dim=self.input_dim,
+                hidden_dim=self.hidden_dim,
+                seq_len=30
+            )
+
+            state_dict = torch.load(
+                lstm_weights_path,
+                map_location=self.device,
+                weights_only=True
+            )
+            self.lstm_model.load_state_dict(state_dict)
             self.lstm_model.to(self.device)
-            self.lstm_model.eval()  # Freeze weights for forward pass
-            logger.info("Successfully loaded PyTorch LSTMAutoencoder weights.")
+            self.lstm_model.eval()
+            logger.info("Loaded PyTorch LSTM Autoencoder state dict.")
 
         except Exception as e:
-            logger.error(f"Failed to initialize InferenceEngine artifacts: {e}")
+            logger.exception("Failed to initialize InferenceEngine artifacts.")
             raise e
 
     def predict_sequence(
-        self, 
-        features_df: pd.DataFrame, 
-        base_threshold: float = 1.4448,
+        self,
+        features_df: pd.DataFrame,
+        base_threshold: float = 1.4066,
         profile_multiplier: float = 1.0
     ) -> Dict[str, Any]:
-        """
-        Executes parallel point-anomaly scoring (Isolation Forest) and 
-        3D PyTorch sequence reconstruction loss calculation (LSTM Autoencoder).
-        
-        Expects features_df to contain exactly 6 columns in training order:
-        [network_speed_kb, packet_frequency, scoring_index, ratio_score, cluster_mean_speed,text_cluster]
-        """
         try:
-            logger.debug(f"Starting sequence inference. Input shape: {features_df.shape}")
-
-            # Verify exact 6-feature input dimension
-            if features_df.shape[1] != self.input_dim:
-                logger.error(f"Feature dimension mismatch! Expected {self.input_dim} columns, got {features_df.shape[1]}.")
-                raise ValueError(f"Inference requires exactly {self.input_dim} feature columns.")
-
             if len(features_df) != 30:
-                raise ValueError(
-                    f"Expected exactly 30 telemetry rows, got {len(features_df)}."
-                )
+                raise ValueError(f"Sequence length must be exactly 30 rows, received {len(features_df)}.")
 
-            #  Scale 6 numerical features using pre-fitted StandardScaler
+            if features_df.shape[1] != self.input_dim:
+                raise ValueError(f"Expected {self.input_dim} features, received {features_df.shape[1]}.")
+
+            # 1. Scale all 6 features for the LSTM Autoencoder
             scaled_features = self.scaler.transform(features_df)
 
-            #  Parallel Point-Anomaly Check via Isolation Forest
-            if_predictions = self.isolation_forest.predict(scaled_features)
-            has_point_anomaly = -1 in if_predictions
+            # 2. Isolation Forest point check:
+            # Use the 3 features it was fitted on in the notebook (columns [2, 3, 4]: scoring_index, ratio_score, cluster_mean_speed)
+            # If your IsoForest was fitted on 3 features, slice the 3 corresponding scaled columns:
+            if hasattr(self.isolation_forest, "n_features_in_") and self.isolation_forest.n_features_in_ == 3:
+                iso_features = scaled_features[:, [2, 3, 4]]
+            else:
+                iso_features = scaled_features
 
-            #  Reshape scaled features to 3D Tensor: (batch_size=1, sequence_length=30, input_dim=6)
+            if_preds = self.isolation_forest.predict(iso_features)
+            has_point_anomaly = bool(-1 in if_preds)
+
+            # 3. 3D tensor conversion for LSTM: shape (1, 30, 6)
             tensor_input = torch.tensor(scaled_features, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-            #  PyTorch Forward Pass (No Gradients)
+            # 4. PyTorch forward reconstruction pass
             with torch.no_grad():
                 reconstructed = self.lstm_model(tensor_input)
-                # Compute Mean Squared Error (MSE) reconstruction loss
-                mse_loss = torch.mean((tensor_input - reconstructed) ** 2).item()
+                mse_loss = float(torch.mean((tensor_input - reconstructed) ** 2).item())
 
-            #  Dynamic Context Threshold Evaluation
-            effective_threshold = base_threshold * profile_multiplier
-            is_anomaly = (mse_loss > effective_threshold) or has_point_anomaly
-
-            logger.info(
-                f"Inference Complete | Loss: {mse_loss:.4f} | "
-                f"Effective Threshold: {effective_threshold:.4f} | "
-                f"Point Anomaly: {has_point_anomaly} | Flagged: {is_anomaly}"
-            )
+            # 5. Threshold comparison against base_threshold
+            effective_threshold = float(base_threshold * profile_multiplier)
+            is_anomaly = bool((mse_loss > effective_threshold) or has_point_anomaly)
 
             return {
-                "is_anomaly": bool(is_anomaly),
-                "reconstruction_loss": float(mse_loss),
-                "effective_threshold": float(effective_threshold),
-                "point_anomaly_detected": bool(has_point_anomaly)
+                "is_anomaly": is_anomaly,
+                "reconstruction_loss": mse_loss,
+                "effective_threshold": effective_threshold,
+                "point_anomaly_detected": has_point_anomaly,
+                "base_threshold": float(base_threshold),
+                "profile_multiplier": float(profile_multiplier)
             }
 
         except Exception as e:
-            logger.exception("Error during sequence inference execution.")
+            logger.exception("Error executing sequence prediction.")
             raise e
-
         

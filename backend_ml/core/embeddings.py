@@ -44,8 +44,7 @@ def assign_text_cluster(
         # clean window title.
         processed_df['cleaned_window_title']=processed_df['window_title'].apply(clean_text)
 
-
-        unique_titles=processed_df['cleaned_window_title'].unique()
+        unique_titles = [str(t) for t in processed_df['cleaned_window_title'].unique()]
         logger.debug(f"Found {len(unique_titles)} unique cleaned window titles.")
 
         embeddings=model.encode(unique_titles,show_progress_bar=False)

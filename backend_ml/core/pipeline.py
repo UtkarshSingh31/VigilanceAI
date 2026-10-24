@@ -14,7 +14,7 @@ class PipelineOrchestrator:
         scaler_path: str,
         isolation_forest_path: str,
         lstm_weights_path: str,
-        base_threshold: float = 1.7520,
+        base_threshold: float = 1.6923,
         input_dim: int = 6,
         hidden_dim: int = 64,
         device: str = "cpu"
@@ -50,12 +50,12 @@ class PipelineOrchestrator:
             f"{len(room_configs)} rooms."
         )
 
-        self.inference_engine = InferenceEngine(
+        self.shared_inference_engine = InferenceEngine(
             scaler_path=scaler_path,
             isolation_forest_path=isolation_forest_path,
             lstm_weights_path=lstm_weights_path,
             input_dim=input_dim,
-            hidden_dim=hidden_dim,
+            hidden_dim=hidden_dim if hidden_dim == 32 else 32,
             device=device
         )
         logger.info("PipelineOrchestrator and InferenceEngine initialized successfully.")
@@ -129,7 +129,7 @@ class PipelineOrchestrator:
             )
 
             #  Inference Execution (StandardScaler -> Isolation Forest -> PyTorch LSTM)
-            results = self.inference_engine.predict_sequence(
+            results = self.shared_inference_engine.predict_sequence(
                 features_df=engineered_df,
                 base_threshold=self.base_threshold,
                 profile_multiplier=profile_multiplier
