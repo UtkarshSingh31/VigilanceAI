@@ -20,7 +20,9 @@ dependencies = [
     "logging",
     "python-dotenv",
     "pytest",
-    "pytest-mock"
+    "pytest-mock",
+    "psutil>=7.2.2",
+    "httpx2>=2.16.0",
 ]
 [tool.uv]
 managed = true
